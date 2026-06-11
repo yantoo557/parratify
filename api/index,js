@@ -6,11 +6,19 @@ const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
 
 const app = express();
-
 app.use(cors());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, '..', 'public'))); // path public dari api/index.js
+app.use(express.json());
 
+// Serve static files dari folder public
+app.use(express.static(path.resolve(__dirname, '..', 'public')));
+
+// Route root
+app.get('/', (req, res) => {
+    res.sendFile(path.resolve(__dirname, '..', 'public', 'index.html'));
+});
+
+// Route download
 app.post('/download', async (req, res) => {
     const spotifyUrl = req.body.url?.trim();
     if (!spotifyUrl || !spotifyUrl.includes('spotify.com')) {
@@ -18,20 +26,17 @@ app.post('/download', async (req, res) => {
     }
 
     const uid = uuidv4().slice(0,8);
-    const outDir = path.join('/tmp', uid); // Vercel hanya bisa tulis di /tmp
+    const outDir = path.join('/tmp', uid);
     fs.mkdirSync(outDir, { recursive: true });
 
     try {
         await youtubedl(spotifyUrl, {
             output: `${outDir}/%(title)s.%(ext)s`,
-            extractAudio: true,
-            audioFormat: 'mp3',
-            audioQuality: 0,
             noPlaylist: true,
         });
 
-        const files = fs.readdirSync(outDir).filter(f => f.endsWith('.mp3'));
-        if (files.length === 0) throw new Error('No MP3 generated');
+        const files = fs.readdirSync(outDir).filter(f => !f.startsWith('.'));
+        if (files.length === 0) throw new Error('No file generated');
         const filePath = path.join(outDir, files[0]);
 
         res.download(filePath, files[0], () => {
@@ -43,10 +48,4 @@ app.post('/download', async (req, res) => {
     }
 });
 
-// Route untuk root
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
-});
-
-// Export app untuk Vercel
 module.exports = app;
