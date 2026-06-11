@@ -1,5 +1,7 @@
 const express = require('express');
-const youtubedl = require('youtube-dl-exec');
+const SpotifyWebApi = require('spotify-web-api-node');
+const ytdl = require('ytdl-core');
+const ytSearch = require('yt-search');
 const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
@@ -9,43 +11,70 @@ const app = express();
 app.use(cors());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-
-// Serve static files dari folder public
 app.use(express.static(path.resolve(__dirname, '..', 'public')));
 
-// Route root
+// Ganti dengan credentials Spotify asli (atau pakai env variable)
+const spotifyApi = new SpotifyWebApi({
+    clientId: process.env.SPOTIFY_CLIENT_ID || 'YOUR_CLIENT_ID',
+    clientSecret: process.env.SPOTIFY_CLIENT_SECRET || 'YOUR_CLIENT_SECRET'
+});
+
 app.get('/', (req, res) => {
     res.sendFile(path.resolve(__dirname, '..', 'public', 'index.html'));
 });
 
-// Route download
 app.post('/download', async (req, res) => {
     const spotifyUrl = req.body.url?.trim();
-    if (!spotifyUrl || !spotifyUrl.includes('spotify.com')) {
-        return res.status(400).json({ error: 'URL tidak valid' });
+    if (!spotifyUrl || !spotifyUrl.includes('spotify.com/track/')) {
+        return res.status(400).json({ error: 'URL Spotify track tidak valid' });
     }
 
-    const uid = uuidv4().slice(0,8);
-    const outDir = path.join('/tmp', uid);
-    fs.mkdirSync(outDir, { recursive: true });
-
     try {
-        await youtubedl(spotifyUrl, {
-            output: `${outDir}/%(title)s.%(ext)s`,
-            noPlaylist: true,
+        const authData = await spotifyApi.clientCredentialsGrant();
+        spotifyApi.setAccessToken(authData.body.access_token);
+
+        const trackId = spotifyUrl.split('/track/')[1]?.split('?')[0];
+        if (!trackId) throw new Error('Track ID tidak ditemukan');
+
+        const track = await spotifyApi.getTrack(trackId);
+        const trackName = track.body.name;
+        const artistName = track.body.artists[0].name;
+        const query = `${trackName} ${artistName} official audio`;
+
+        const searchResult = await ytSearch(query);
+        const video = searchResult.videos[0];
+        if (!video) throw new Error('Video tidak ditemukan di YouTube');
+
+        const uid = uuidv4().slice(0,8);
+        const outDir = path.join('/tmp', uid);
+        fs.mkdirSync(outDir, { recursive: true });
+
+        const stream = ytdl(video.url, { filter: 'audioonly', quality: 'lowestaudio' });
+        const safeName = trackName.replace(/[^a-zA-Z0-9]/g, '_');
+        const fileName = `${safeName}.webm`;
+        const filePath = path.join(outDir, fileName);
+        const writeStream = fs.createWriteStream(filePath);
+
+        stream.pipe(writeStream);
+
+        writeStream.on('finish', () => {
+            res.download(filePath, fileName, () => {
+                fs.rmSync(outDir, { recursive: true, force: true });
+            });
         });
 
-        const files = fs.readdirSync(outDir).filter(f => !f.startsWith('.'));
-        if (files.length === 0) throw new Error('No file generated');
-        const filePath = path.join(outDir, files[0]);
-
-        res.download(filePath, files[0], () => {
-            fs.rmSync(outDir, { recursive: true, force: true });
+        writeStream.on('error', (err) => {
+            if (fs.existsSync(outDir)) fs.rmSync(outDir, { recursive: true, force: true });
+            res.status(500).json({ error: err.message });
         });
     } catch (err) {
-        if (fs.existsSync(outDir)) fs.rmSync(outDir, { recursive: true, force: true });
         res.status(500).json({ error: err.message });
     }
 });
+
+if (require.main === module) {
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => console.log(`Server berjalan di http://localhost:${PORT}`));
+}
 
 module.exports = app;

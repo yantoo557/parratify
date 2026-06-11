@@ -7,12 +7,31 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "uuid": "^9.0.0",
-    "youtube-dl-exec": "^3.0.2"
+    "cors": "^2.8.6",
+    "express": "^4.22.2",
+    "spotify-web-api-node": "^5.0.2",
+    "uuid": "^9.0.1",
+    "youtube-dl-exec": "^3.0.2",
+    "yt-search": "^2.13.1",
+    "ytdl-core": "^4.11.5"
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "description": "",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yantoo557/parratify.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/yantoo557/parratify/issues"
+  },
+  "homepage": "https://github.com/yantoo557/parratify#readme",
+  "devDependencies": {
+    "nodemon": "^3.1.14"
   }
 }
